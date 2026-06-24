@@ -18,6 +18,7 @@ pub fn init_db() -> Result<Connection> {
     
     // Auto-update schema
     let _ = conn.execute("ALTER TABLE accounts ADD COLUMN supabase_token TEXT", []);
+    let _ = conn.execute("ALTER TABLE accounts ADD COLUMN vercel_token TEXT", []);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tokens (
