@@ -67,13 +67,35 @@ enum Commands {
         /// Password Database (minimal 8 karakter)
         db_password: String,
     },
+    /// Tambah Vercel Access Token ke akun secara interaktif
+    AddVercel {
+        /// Email akun Google
+        email: String,
+    },
+    /// Tanam Vercel Project
+    #[command(name = "farm-vercel")]
+    FarmVercel {
+        /// Email akun
+        email: String,
+        /// Nama project Vercel
+        project_name: String,
+    },
+    /// Hapus akun dari database
+    #[command(alias = "rm", alias = "remove")]
+    Delete {
+        /// Email akun yang akan dihapus
+        email: String,
+    },
     /// Keluar dari aplikasi
     #[command(alias = "q", alias = "exit")]
     Quit,
+}
+
 mod db;
 pub mod config;
 pub mod supabase;
 pub mod google;
+pub mod vercel;
 
 fn print_hacker_logo() {
     let logo = r#"
@@ -137,6 +159,12 @@ async fn main() -> Result<()> {
                             }
                             Commands::Delete { email } => {
                                 let _ = db::delete_account(&conn, &email);
+                            }
+                            Commands::AddVercel { email } => {
+                                vercel::handle_add_vercel(&conn, &email);
+                            }
+                            Commands::FarmVercel { email, project_name } => {
+                                vercel::handle_farm_vercel(&conn, &email, &project_name).await;
                             }
                             Commands::Quit => {
                                 println!("{}", "Exiting...".dimmed());
