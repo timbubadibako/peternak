@@ -99,6 +99,9 @@ enum Commands {
         /// Email akun yang akan dihapus
         email: String,
     },
+    /// Bersihkan layar (Clear screen)
+    #[command(alias = "c", alias = "cls")]
+    Clear,
     /// Keluar dari aplikasi
     #[command(alias = "q", alias = "exit")]
     Quit,
@@ -196,6 +199,9 @@ async fn main() -> Result<()> {
                         }
                         Commands::FarmGithub { email, repo_name } => {
                             github::handle_farm_github(&conn, &email, &repo_name).await;
+                        }
+                        Commands::Clear => {
+                            print!("{esc}c", esc = 27 as char);
                         }
                         Commands::Quit => {
                             println!("{}", "Exiting...".dimmed());
