@@ -33,3 +33,35 @@ pub fn init_db() -> Result<Connection> {
 
     Ok(conn)
 }
+
+use colored::*;
+use crate::config;
+
+pub fn list_accounts(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("SELECT email FROM accounts ORDER BY id ASC")?;
+    let account_iter = stmt.query_map([], |row| {
+        let email: String = row.get(0)?;
+        Ok(email)
+    })?;
+
+    println!("{}", "Daftar Akun:".cyan().bold());
+    for (index, account) in account_iter.enumerate() {
+        let email = account?;
+        println!("{}. {}", index + 1, email);
+    }
+    Ok(())
+}
+
+pub fn delete_account(conn: &Connection, email: &str) -> Result<()> {
+    match conn.execute("DELETE FROM accounts WHERE email = ?1", [&email]) {
+        Ok(0) => println!("{}", format!("Akun {} tidak ditemukan di database.", email).yellow()),
+        Ok(_) => {
+            let token_cache_path = config::get_token_cache_path(email);
+            let _ = std::fs::remove_file(token_cache_path);
+            
+            println!("{}", format!("Sukses! Akun {} dan tokennya telah dihapus secara permanen.", email).green());
+        },
+        Err(e) => println!("{}", format!("Gagal menghapus akun: {}", e).red()),
+    }
+    Ok(())
+}

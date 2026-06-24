@@ -118,17 +118,7 @@ async fn main() -> Result<()> {
                                 google::handle_add(&conn, &email).await;
                             }
                             Commands::List => {
-                                let mut stmt = conn.prepare("SELECT email FROM accounts ORDER BY id ASC")?;
-                                let account_iter = stmt.query_map([], |row| {
-                                    let email: String = row.get(0)?;
-                                    Ok(email)
-                                })?;
-
-                                println!("{}", "Daftar Akun:".cyan().bold());
-                                for (index, account) in account_iter.enumerate() {
-                                    let email = account?;
-                                    println!("{}. {}", index + 1, email);
-                                }
+                                let _ = db::list_accounts(&conn);
                             }
                             Commands::Get { email, service } => {
                                 google::handle_get(&conn, &email, &service).await;
@@ -146,17 +136,7 @@ async fn main() -> Result<()> {
                                 supabase::handle_farm_supa(&conn, &email, &project_name, &db_password).await;
                             }
                             Commands::Delete { email } => {
-                                match conn.execute("DELETE FROM accounts WHERE email = ?1", [&email]) {
-                                    Ok(0) => println!("{}", format!("Akun {} tidak ditemukan di database.", email).yellow()),
-                                    Ok(_) => {
-                                        // Hapus juga file token json nya
-                                        let token_cache_path = config::get_token_cache_path(email);
-                                        let _ = std::fs::remove_file(token_cache_path);
-                                        
-                                        println!("{}", format!("Sukses! Akun {} dan tokennya telah dihapus secara permanen.", email).green());
-                                    },
-                                    Err(e) => println!("{}", format!("Gagal menghapus akun: {}", e).red()),
-                                }
+                                let _ = db::delete_account(&conn, &email);
                             }
                             Commands::Quit => {
                                 println!("{}", "Exiting...".dimmed());
