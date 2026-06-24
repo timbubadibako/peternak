@@ -80,6 +80,19 @@ enum Commands {
         /// Nama project Vercel
         project_name: String,
     },
+    /// Tambah GitHub Access Token ke akun secara interaktif
+    AddGithub {
+        /// Email akun
+        email: String,
+    },
+    /// Tanam Repository GitHub
+    #[command(name = "farm-github")]
+    FarmGithub {
+        /// Email akun
+        email: String,
+        /// Nama repository
+        repo_name: String,
+    },
     /// Hapus akun dari database
     #[command(alias = "rm", alias = "remove")]
     Delete {
@@ -96,6 +109,7 @@ pub mod config;
 pub mod supabase;
 pub mod google;
 pub mod vercel;
+pub mod github;
 
 fn print_hacker_logo() {
     let logo = r#"
@@ -165,6 +179,12 @@ async fn main() -> Result<()> {
                             }
                             Commands::FarmVercel { email, project_name } => {
                                 vercel::handle_farm_vercel(&conn, &email, &project_name).await;
+                            }
+                            Commands::AddGithub { email } => {
+                                github::handle_add_github(&conn, &email);
+                            }
+                            Commands::FarmGithub { email, repo_name } => {
+                                github::handle_farm_github(&conn, &email, &repo_name).await;
                             }
                             Commands::Quit => {
                                 println!("{}", "Exiting...".dimmed());
