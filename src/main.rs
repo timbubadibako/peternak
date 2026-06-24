@@ -72,6 +72,7 @@ enum Commands {
     Quit,
 }
 mod db;
+pub mod config;
 
 fn print_hacker_logo() {
     let logo = r#"
@@ -115,8 +116,7 @@ async fn main() -> Result<()> {
                             Commands::Add { email } => {
                                 println!("{}", format!("Menyiapkan proses login Google untuk akun: {}", email).blue());
                                 
-                                let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                                let secret_path = config_dir.join("peternak-aiai").join("client_secret.json");
+                                let secret_path = config::get_secret_path();
                                 
                                 if !secret_path.exists() {
                                     println!("{}", "=========================================================".red());
@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
                                     Ok(secret) => {
                                         println!("{}", "Membuka browser untuk otentikasi...".cyan());
                                         // Gunakan InstalledFlow untuk membuka browser lokal otomatis
-                                        let token_cache_path = config_dir.join("peternak-aiai").join(format!("token_{}.json", email));
+                                        let token_cache_path = config::get_token_cache_path(&email);
                                         
                                         let auth_result = yup_oauth2::InstalledFlowAuthenticator::builder(
                                             secret,
@@ -188,9 +188,8 @@ async fn main() -> Result<()> {
                             Commands::Get { email, service } => {
                                 println!("Mengambil token {} untuk akun {}...", service.bold(), email.bold());
                                 
-                                let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                                let secret_path = config_dir.join("peternak-aiai").join("client_secret.json");
-                                let token_cache_path = config_dir.join("peternak-aiai").join(format!("token_{}.json", email));
+                                let secret_path = config::get_secret_path();
+                                let token_cache_path = config::get_token_cache_path(&email);
 
                                 if !token_cache_path.exists() {
                                     println!("{}", format!("ERROR: Sesi untuk {} belum ada. Ketik 'add {}' dulu.", email, email).red());
@@ -230,9 +229,8 @@ async fn main() -> Result<()> {
                             Commands::Inject { email, service } => {
                                 println!("Menyiapkan injeksi token {} untuk akun {}...", service.bold(), email.bold());
                                 
-                                let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                                let secret_path = config_dir.join("peternak-aiai").join("client_secret.json");
-                                let token_cache_path = config_dir.join("peternak-aiai").join(format!("token_{}.json", email));
+                                let secret_path = config::get_secret_path();
+                                let token_cache_path = config::get_token_cache_path(&email);
 
                                 if !token_cache_path.exists() {
                                     println!("{}", format!("ERROR: Sesi untuk {} belum ada. Ketik 'add {}' dulu.", email, email).red());
@@ -255,7 +253,7 @@ async fn main() -> Result<()> {
                                                 
                                                 // Simulasi penulisan ke file konfigurasi spesifik service
                                                 if service.to_lowercase() == "antigravity" {
-                                                    let agy_config = config_dir.join("antigravity-cli-mock-config.json");
+                                                    let agy_config = config::get_config_dir().join("antigravity-cli-mock-config.json");
                                                     let config_content = format!(r#"{{ "current_account": "{}", "access_token": "{}" }}"#, email, access_token);
                                                     
                                                     match std::fs::write(&agy_config, config_content) {
@@ -280,9 +278,8 @@ async fn main() -> Result<()> {
                             Commands::Space { email } => {
                                 println!("Mengecek kapasitas Google Drive untuk akun {}...", email.bold());
                                 
-                                let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                                let secret_path = config_dir.join("peternak-aiai").join("client_secret.json");
-                                let token_cache_path = config_dir.join("peternak-aiai").join(format!("token_{}.json", email));
+                                let secret_path = config::get_secret_path();
+                                let token_cache_path = config::get_token_cache_path(&email);
 
                                 if !token_cache_path.exists() {
                                     println!("{}", format!("ERROR: Sesi untuk {} belum ada. Ketik 'add {}' dulu.", email, email).red());
@@ -475,8 +472,7 @@ async fn main() -> Result<()> {
                                     Ok(0) => println!("{}", format!("Akun {} tidak ditemukan di database.", email).yellow()),
                                     Ok(_) => {
                                         // Hapus juga file token json nya
-                                        let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                                        let token_cache_path = config_dir.join("peternak-aiai").join(format!("token_{}.json", email));
+                                        let token_cache_path = config::get_token_cache_path(email);
                                         let _ = std::fs::remove_file(token_cache_path);
                                         
                                         println!("{}", format!("Sukses! Akun {} dan tokennya telah dihapus secara permanen.", email).green());

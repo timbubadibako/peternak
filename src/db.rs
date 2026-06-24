@@ -2,14 +2,7 @@ use rusqlite::{Connection, Result};
 use std::path::PathBuf;
 
 pub fn init_db() -> Result<Connection> {
-    let db_path = dirs::config_dir()
-        .map(|mut p| {
-            p.push("peternak-aiai");
-            std::fs::create_dir_all(&p).ok();
-            p.push("data.db");
-            p
-        })
-        .unwrap_or_else(|| PathBuf::from("data.db"));
+    let db_path = crate::config::get_app_dir().join("data.db");
 
     let conn = Connection::open(db_path)?;
 
