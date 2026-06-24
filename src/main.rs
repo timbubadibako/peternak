@@ -1,9 +1,9 @@
 use clap::Parser;
-use rusqlite::{Connection, Result};
-use std::path::PathBuf;
 use colored::*;
-use rustyline::error::ReadlineError;
+use rusqlite::{Connection, Result};
 use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "")]
@@ -104,12 +104,12 @@ enum Commands {
     Quit,
 }
 
-mod db;
 pub mod config;
-pub mod supabase;
-pub mod google;
-pub mod vercel;
+mod db;
 pub mod github;
+pub mod google;
+pub mod supabase;
+pub mod vercel;
 
 fn print_hacker_logo() {
     let logo = r#"
@@ -123,7 +123,11 @@ fn print_hacker_logo() {
 "#;
     println!("{}", logo.green().bold());
     println!("{}", "Welcome to Peternak-AIAI Interactive Shell".green());
-    println!("{}", "Ketik 'help' untuk melihat daftar command. Ketik 'quit' atau 'exit' untuk keluar.\n".dimmed());
+    println!(
+        "{}",
+        "Ketik 'help' untuk melihat daftar command. Ketik 'quit' atau 'exit' untuk keluar.\n"
+            .dimmed()
+    );
 }
 
 #[tokio::main]
@@ -141,57 +145,63 @@ async fn main() -> Result<()> {
                 if line.is_empty() {
                     continue;
                 }
-                
+
                 rl.add_history_entry(line).unwrap();
 
                 // Split input ke bentuk vector string (contoh: "add a@g.com" -> ["add", "a@g.com"])
                 let args = shlex::split(line).unwrap_or_else(|| vec![line.to_string()]);
 
                 match Cli::try_parse_from(args) {
-                    Ok(cli) => {
-                        match cli.command {
-                            Commands::Add { email } => {
-                                google::handle_add(&conn, &email).await;
-                            }
-                            Commands::List => {
-                                let _ = db::list_accounts(&conn);
-                            }
-                            Commands::Get { email, service } => {
-                                google::handle_get(&conn, &email, &service).await;
-                            }
-                            Commands::Inject { email, service } => {
-                                google::handle_inject(&conn, &email, &service).await;
-                            }
-                            Commands::Space { email } => {
-                                google::handle_space(&conn, &email).await;
-                            }
-                            Commands::AddSupa { email } => {
-                                supabase::handle_add_supa(&conn, &email);
-                            }
-                            Commands::FarmSupa { email, project_name, db_password } => {
-                                supabase::handle_farm_supa(&conn, &email, &project_name, &db_password).await;
-                            }
-                            Commands::Delete { email } => {
-                                let _ = db::delete_account(&conn, &email);
-                            }
-                            Commands::AddVercel { email } => {
-                                vercel::handle_add_vercel(&conn, &email);
-                            }
-                            Commands::FarmVercel { email, project_name } => {
-                                vercel::handle_farm_vercel(&conn, &email, &project_name).await;
-                            }
-                            Commands::AddGithub { email } => {
-                                github::handle_add_github(&conn, &email);
-                            }
-                            Commands::FarmGithub { email, repo_name } => {
-                                github::handle_farm_github(&conn, &email, &repo_name).await;
-                            }
-                            Commands::Quit => {
-                                println!("{}", "Exiting...".dimmed());
-                                break;
-                            }
+                    Ok(cli) => match cli.command {
+                        Commands::Add { email } => {
+                            google::handle_add(&conn, &email).await;
                         }
-                    }
+                        Commands::List => {
+                            let _ = db::list_accounts(&conn);
+                        }
+                        Commands::Get { email, service } => {
+                            google::handle_get(&conn, &email, &service).await;
+                        }
+                        Commands::Inject { email, service } => {
+                            google::handle_inject(&conn, &email, &service).await;
+                        }
+                        Commands::Space { email } => {
+                            google::handle_space(&conn, &email).await;
+                        }
+                        Commands::AddSupa { email } => {
+                            supabase::handle_add_supa(&conn, &email);
+                        }
+                        Commands::FarmSupa {
+                            email,
+                            project_name,
+                            db_password,
+                        } => {
+                            supabase::handle_farm_supa(&conn, &email, &project_name, &db_password)
+                                .await;
+                        }
+                        Commands::Delete { email } => {
+                            let _ = db::delete_account(&conn, &email);
+                        }
+                        Commands::AddVercel { email } => {
+                            vercel::handle_add_vercel(&conn, &email);
+                        }
+                        Commands::FarmVercel {
+                            email,
+                            project_name,
+                        } => {
+                            vercel::handle_farm_vercel(&conn, &email, &project_name).await;
+                        }
+                        Commands::AddGithub { email } => {
+                            github::handle_add_github(&conn, &email);
+                        }
+                        Commands::FarmGithub { email, repo_name } => {
+                            github::handle_farm_github(&conn, &email, &repo_name).await;
+                        }
+                        Commands::Quit => {
+                            println!("{}", "Exiting...".dimmed());
+                            break;
+                        }
+                    },
                     Err(err) => {
                         // Print help atau error message dari clap
                         err.print().unwrap();

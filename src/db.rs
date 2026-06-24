@@ -15,7 +15,7 @@ pub fn init_db() -> Result<Connection> {
         )",
         [],
     )?;
-    
+
     // Auto-update schema
     let _ = conn.execute("ALTER TABLE accounts ADD COLUMN supabase_token TEXT", []);
     let _ = conn.execute("ALTER TABLE accounts ADD COLUMN vercel_token TEXT", []);
@@ -36,8 +36,8 @@ pub fn init_db() -> Result<Connection> {
     Ok(conn)
 }
 
-use colored::*;
 use crate::config;
+use colored::*;
 
 pub fn list_accounts(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("SELECT email FROM accounts ORDER BY id ASC")?;
@@ -56,13 +56,23 @@ pub fn list_accounts(conn: &Connection) -> Result<()> {
 
 pub fn delete_account(conn: &Connection, email: &str) -> Result<()> {
     match conn.execute("DELETE FROM accounts WHERE email = ?1", [&email]) {
-        Ok(0) => println!("{}", format!("Akun {} tidak ditemukan di database.", email).yellow()),
+        Ok(0) => println!(
+            "{}",
+            format!("Akun {} tidak ditemukan di database.", email).yellow()
+        ),
         Ok(_) => {
             let token_cache_path = config::get_token_cache_path(email);
             let _ = std::fs::remove_file(token_cache_path);
-            
-            println!("{}", format!("Sukses! Akun {} dan tokennya telah dihapus secara permanen.", email).green());
-        },
+
+            println!(
+                "{}",
+                format!(
+                    "Sukses! Akun {} dan tokennya telah dihapus secara permanen.",
+                    email
+                )
+                .green()
+            );
+        }
         Err(e) => println!("{}", format!("Gagal menghapus akun: {}", e).red()),
     }
     Ok(())
