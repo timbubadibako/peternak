@@ -22,3 +22,7 @@ pub fn get_secret_path() -> PathBuf {
 pub fn get_token_cache_path(email: &str) -> PathBuf {
     get_app_dir().join(format!("token_{}.json", email))
 }
+
+pub fn get_antigravity_secret_path(account: &str) -> PathBuf {
+    get_app_dir().join(format!("agy-{}.secret.json", account))
+}
