@@ -1,5 +1,5 @@
 use colored::*;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
 pub fn handle_add_supa(conn: &Connection, email: &str) {
     println!(
@@ -40,7 +40,7 @@ pub fn handle_add_supa(conn: &Connection, email: &str) {
 
     match conn.execute(
         "UPDATE accounts SET supabase_token = ?1 WHERE email = ?2",
-        [&token, &email],
+        params![token, email],
     ) {
         Ok(0) => println!(
             "{}",
