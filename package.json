@@ -1,0 +1,21 @@
+{
+  "name": "peternak-aiai",
+  "version": "0.1.0",
+  "description": "Peternak AIAI terminal orchestrator",
+  "license": "UNLICENSED",
+  "bin": {
+    "peternak-aiai": "npm/bin/peternak-aiai.js",
+    "peternak": "npm/bin/peternak-aiai.js"
+  },
+  "scripts": {
+    "postinstall": "node npm/install.js",
+    "pack:release": "bash scripts/package-release.sh"
+  },
+  "files": [
+    "npm/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
