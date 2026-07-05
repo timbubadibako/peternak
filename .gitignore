@@ -11,7 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
-
+.brains
+.codegraph
+.tokensave
+compare
+state.vscdb
+storage.json
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
