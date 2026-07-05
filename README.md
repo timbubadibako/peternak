@@ -34,7 +34,7 @@ Archive akan dibuat di `dist/peternak-aiai-<target>.tar.gz`.
 Install via curl untuk Linux/macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jrilym/peternak-aiai/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/timbubadibako/peternak/main/install.sh | sh
 ```
 
 Untuk private/self-hosted release, arahkan URL archive:
@@ -47,7 +47,7 @@ PETERNAK_DOWNLOAD_BASE=https://example.com/releases/v0.1.0 \
 Install via PowerShell di Windows:
 
 ```powershell
-irm https://raw.githubusercontent.com/jrilym/peternak-aiai/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/timbubadibako/peternak/main/install.ps1 | iex
 ```
 
 Install via npm:

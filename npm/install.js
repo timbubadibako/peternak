@@ -17,7 +17,7 @@ const target = resolveTarget();
 const archiveName = `peternak-aiai-${target}.tar.gz`;
 const baseUrl =
   process.env.PETERNAK_DOWNLOAD_BASE ||
-  `https://github.com/jrilym/peternak-aiai/releases/download/v${pkg.version}`;
+  `https://github.com/timbubadibako/peternak/releases/download/v${pkg.version}`;
 const url = `${baseUrl.replace(/\/$/, "")}/${archiveName}`;
 
 const vendorDir = path.join(__dirname, "vendor");

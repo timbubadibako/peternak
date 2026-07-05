@@ -5,7 +5,7 @@ $Version = if ($env:PETERNAK_VERSION) { $env:PETERNAK_VERSION } else { "latest" 
 $BaseUrl = if ($env:PETERNAK_DOWNLOAD_BASE) {
     $env:PETERNAK_DOWNLOAD_BASE.TrimEnd("/")
 } else {
-    "https://github.com/jrilym/peternak-aiai/releases/$Version/download"
+    "https://github.com/timbubadibako/peternak/releases/$Version/download"
 }
 $InstallDir = if ($env:PETERNAK_INSTALL_DIR) {
     $env:PETERNAK_INSTALL_DIR

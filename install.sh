@@ -3,7 +3,7 @@ set -eu
 
 APP="peternak-aiai"
 VERSION="${PETERNAK_VERSION:-latest}"
-BASE_URL="${PETERNAK_DOWNLOAD_BASE:-https://github.com/jrilym/peternak-aiai/releases/${VERSION}/download}"
+BASE_URL="${PETERNAK_DOWNLOAD_BASE:-https://github.com/timbubadibako/peternak/releases/${VERSION}/download}"
 INSTALL_DIR="${PETERNAK_INSTALL_DIR:-$HOME/.local/bin}"
 
 OS="$(uname -s)"
