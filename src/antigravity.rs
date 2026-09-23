@@ -1,10 +1,100 @@
 use crate::{config, credential_store, db};
 use colored::*;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use portable_pty::{CommandBuilder, ExitStatus as PtyExitStatus, PtySize, native_pty_system};
 use rusqlite::Connection;
 use std::fs;
+use std::io::{self, Read, Write};
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 const AGY_PROVIDER: &str = "agy";
+const CONTEXT_ENTRY_LIMIT: usize = 30;
+const CONTEXT_CHAR_LIMIT: usize = 6_000;
+
+#[derive(Default)]
+pub struct AgyContinuityContext {
+    user_entries: Vec<String>,
+    user_rules: Vec<String>,
+    last_account_alias: Option<String>,
+}
+
+#[derive(Default)]
+struct InputCaptureState {
+    line: Vec<u8>,
+    escape: EscapeState,
+}
+
+#[derive(Default)]
+enum EscapeState {
+    #[default]
+    None,
+    Esc,
+    Csi,
+    Osc,
+}
+
+impl AgyContinuityContext {
+    fn push_user(&mut self, line: &str) {
+        let line = line.trim();
+        if line.is_empty() {
+            return;
+        }
+
+        if looks_like_user_rule(line) && !self.user_rules.iter().any(|rule| rule == line) {
+            self.user_rules.push(line.chars().take(800).collect());
+        }
+
+        self.user_entries.push(line.chars().take(800).collect());
+        if self.user_entries.len() > CONTEXT_ENTRY_LIMIT {
+            let overflow = self.user_entries.len() - CONTEXT_ENTRY_LIMIT;
+            self.user_entries.drain(0..overflow);
+        }
+
+        while self.render().len() > CONTEXT_CHAR_LIMIT && self.user_entries.len() > 1 {
+            self.user_entries.remove(0);
+        }
+    }
+
+    fn render(&self) -> String {
+        let mut lines = Vec::new();
+        if !self.user_rules.is_empty() {
+            lines.push("Explicit user rules:".to_string());
+            lines.extend(self.user_rules.iter().map(|rule| format!("- {}", rule)));
+        }
+
+        if !self.user_entries.is_empty() {
+            lines.push("Recent user messages:".to_string());
+            lines.extend(self.user_entries.iter().map(|entry| format!("- {}", entry)));
+        }
+
+        lines.join("\n")
+    }
+
+    fn has_context(&self) -> bool {
+        !self.user_entries.is_empty() || !self.user_rules.is_empty()
+    }
+
+    fn should_restore_for(&self, account_alias: &str) -> bool {
+        self.has_context()
+            && self
+                .last_account_alias
+                .as_deref()
+                .is_some_and(|last| last != account_alias)
+    }
+
+    fn mark_account(&mut self, account_alias: &str) {
+        self.last_account_alias = Some(account_alias.to_string());
+    }
+}
+
+fn looks_like_user_rule(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    (lower.contains("kalau") || lower.contains("kalo") || lower.contains("jika"))
+        && (lower.contains("jawab") || lower.contains("balas") || lower.contains("harus"))
+}
 
 fn account_alias(account: &str) -> String {
     let base = account.split('@').next().unwrap_or(account).trim();
@@ -403,7 +493,12 @@ pub fn handle_list() {
     }
 }
 
-pub fn run_interactive(conn: &Connection, agy_args: &[String], forced_account: Option<&str>) {
+pub fn run_interactive(
+    conn: &Connection,
+    agy_args: &[String],
+    forced_account: Option<&str>,
+    context: &mut AgyContinuityContext,
+) {
     let mut attempted = Vec::new();
 
     loop {
@@ -441,8 +536,15 @@ pub fn run_interactive(conn: &Connection, agy_args: &[String], forced_account: O
             continue;
         }
 
+        let restore_prompt = if context.should_restore_for(&account.alias) {
+            Some(build_restore_prompt(context))
+        } else {
+            None
+        };
+        context.mark_account(&account.alias);
+
         let _ = db::mark_backend_account_used(conn, account.id);
-        let status = Command::new("agy").args(agy_args).status();
+        let status = run_agy_pty(agy_args, restore_prompt.as_deref(), context);
 
         match status {
             Ok(status) if status.success() => {
@@ -452,7 +554,7 @@ pub fn run_interactive(conn: &Connection, agy_args: &[String], forced_account: O
             Ok(status) => {
                 println!(
                     "{}",
-                    format!("[Peternak] agy exited with status: {}", status).yellow()
+                    format!("[Peternak] agy exited with code: {}", status.exit_code()).yellow()
                 );
                 if forced_account.is_some() {
                     return;
@@ -517,4 +619,201 @@ fn print_context_switch_message() {
     println!("{}", "[Peternak] Compressing session context...".cyan());
     println!("{}", "[Peternak] Switching backend identity...".cyan());
     println!("{}", "[Peternak] Restoring workspace context...".cyan());
+}
+
+fn build_restore_prompt(context: &AgyContinuityContext) -> String {
+    format!(
+        "Continue the same Peternak session after a backend account switch. Use this context as active instructions and memory.\n\n<context>\n{}\n</context>\n\nAcknowledge in one short sentence, then wait for the user.\n",
+        context.render()
+    )
+}
+
+fn run_agy_pty(
+    agy_args: &[String],
+    restore_prompt: Option<&str>,
+    context: &mut AgyContinuityContext,
+) -> io::Result<PtyExitStatus> {
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 40,
+            cols: 140,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let mut cmd = CommandBuilder::new("agy");
+    for arg in agy_args {
+        cmd.arg(arg);
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.cwd(cwd.as_os_str());
+        cmd.env("PWD", cwd.as_os_str());
+    }
+
+    let mut child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    drop(pair.slave);
+
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let mut writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let (output_tx, output_rx) = mpsc::channel::<String>();
+    let output_thread = thread::spawn(move || {
+        let mut stdout = io::stdout();
+        let mut buffer = [0_u8; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let _ = stdout.write_all(&buffer[..n]);
+                    let _ = stdout.flush();
+                    let chunk = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    let _ = output_tx.send(chunk);
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    enable_raw_mode()?;
+    let _raw_guard = RawModeGuard;
+    let (input_tx, input_rx) = mpsc::channel::<Vec<u8>>();
+    thread::spawn(move || {
+        let mut stdin = io::stdin();
+        let mut buffer = [0_u8; 1024];
+        loop {
+            match stdin.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if input_tx.send(buffer[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let mut input_capture = InputCaptureState::default();
+    let mut restore_pending = restore_prompt.map(str::to_string);
+    let mut output_seen = String::new();
+    let started_at = Instant::now();
+    loop {
+        drain_output(&output_rx, &mut output_seen);
+
+        if let Some(prompt) = restore_pending.as_deref() {
+            if agy_looks_ready(&output_seen) || started_at.elapsed() > Duration::from_secs(3) {
+                println!(
+                    "{}",
+                    "[Peternak] Restoring captured context into agy...".cyan()
+                );
+                writer.write_all(prompt.as_bytes())?;
+                writer.write_all(b"\n")?;
+                writer.flush()?;
+                restore_pending = None;
+            }
+        }
+
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+        {
+            let _ = output_thread.join();
+            drain_output(&output_rx, &mut output_seen);
+            return Ok(status);
+        }
+
+        for bytes in input_rx.try_iter() {
+            capture_user_bytes(context, &mut input_capture, &bytes);
+            writer.write_all(&bytes)?;
+            writer.flush()?;
+        }
+
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+struct RawModeGuard;
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+    }
+}
+
+fn capture_user_bytes(
+    context: &mut AgyContinuityContext,
+    state: &mut InputCaptureState,
+    bytes: &[u8],
+) {
+    for byte in bytes {
+        match state.escape {
+            EscapeState::Esc => {
+                state.escape = match *byte {
+                    b'[' => EscapeState::Csi,
+                    b']' => EscapeState::Osc,
+                    _ => EscapeState::None,
+                };
+                continue;
+            }
+            EscapeState::Csi => {
+                if (0x40..=0x7e).contains(byte) {
+                    state.escape = EscapeState::None;
+                }
+                continue;
+            }
+            EscapeState::Osc => {
+                if *byte == 0x07 {
+                    state.escape = EscapeState::None;
+                }
+                continue;
+            }
+            EscapeState::None => {}
+        }
+
+        match *byte {
+            0x1b => {
+                state.escape = EscapeState::Esc;
+            }
+            b'\r' | b'\n' => {
+                if !state.line.is_empty() {
+                    let line = String::from_utf8_lossy(&state.line).to_string();
+                    context.push_user(line.trim());
+                    state.line.clear();
+                }
+            }
+            8 | 127 => {
+                state.line.pop();
+            }
+            0x20..=0x7e | 0x80..=0xff => {
+                state.line.push(*byte);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn drain_output(output_rx: &mpsc::Receiver<String>, output_seen: &mut String) {
+    for chunk in output_rx.try_iter() {
+        output_seen.push_str(&chunk);
+        if output_seen.len() > 20_000 {
+            let keep_from = output_seen.len() - 10_000;
+            output_seen.drain(..keep_from);
+        }
+    }
+}
+
+fn agy_looks_ready(output_seen: &str) -> bool {
+    output_seen.contains("Antigravity CLI")
+        && (output_seen.contains("? for shortcuts") || output_seen.contains("────────────────"))
 }

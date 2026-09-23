@@ -251,7 +251,12 @@ fn require_admin(session: &Session) -> bool {
     }
 }
 
-async fn handle_slash_command(conn: &Connection, session: &Session, line: &str) -> bool {
+async fn handle_slash_command(
+    conn: &Connection,
+    session: &Session,
+    agy_context: &mut antigravity::AgyContinuityContext,
+    line: &str,
+) -> bool {
     let args =
         shlex::split(line).unwrap_or_else(|| line.split_whitespace().map(str::to_string).collect());
     if args.is_empty() {
@@ -270,6 +275,7 @@ async fn handle_slash_command(conn: &Connection, session: &Session, line: &str) 
                     conn,
                     &agy_command.args,
                     agy_command.account_selector.as_deref(),
+                    agy_context,
                 );
             }
         }
@@ -488,6 +494,7 @@ async fn main() -> Result<()> {
 
     let role = db::ensure_user(&conn, &sso_id)?;
     let session = Session { sso_id, role };
+    let mut agy_context = antigravity::AgyContinuityContext::default();
 
     println!(
         "{}",
@@ -507,7 +514,7 @@ async fn main() -> Result<()> {
                 rl.add_history_entry(line).unwrap();
 
                 if line.starts_with('/') {
-                    if !handle_slash_command(&conn, &session, line).await {
+                    if !handle_slash_command(&conn, &session, &mut agy_context, line).await {
                         println!("{}", "Exiting...".dimmed());
                         break;
                     }
